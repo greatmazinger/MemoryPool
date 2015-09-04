@@ -36,7 +36,7 @@ for MSVC's STL containers"
 #include <type_traits>
 #include <utility>
 
-template <typename T, size_t BlockSize = 4096>
+template <typename T, size_t BlockSize = 4096, bool LeaveSingleFreeBlock = false>
 class MemoryPool
 {
   public:
@@ -53,14 +53,14 @@ class MemoryPool
     typedef std::true_type  propagate_on_container_swap;
 
     template <typename U> struct rebind {
-      typedef MemoryPool<U, BlockSize> other;
+      typedef MemoryPool<U, BlockSize, LeaveSingleFreeBlock> other;
     };
 
     /* Member functions */
     MemoryPool() noexcept;
     MemoryPool(const MemoryPool& memoryPool) noexcept;
     MemoryPool(MemoryPool&& memoryPool) noexcept;
-    template <class U> MemoryPool(const MemoryPool<U, BlockSize>& memoryPool) noexcept;
+    template <class U> MemoryPool(const MemoryPool<U, BlockSize, LeaveSingleFreeBlock>& memoryPool) noexcept;
 
     ~MemoryPool() noexcept;
 

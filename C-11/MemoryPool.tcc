@@ -25,8 +25,8 @@
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::MemoryPool()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool()
 noexcept
 {
   firstBlock_ = nullptr;
@@ -36,16 +36,16 @@ noexcept
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::MemoryPool(const MemoryPool& memoryPool)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool(const MemoryPool& memoryPool)
 noexcept :
 MemoryPool()
 {}
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::MemoryPool(MemoryPool&& memoryPool)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool(MemoryPool&& memoryPool)
 noexcept
 {
   firstBlock_ = memoryPool.firstBlock_;
@@ -57,18 +57,18 @@ noexcept
 }
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template<class U>
-MemoryPool<T, BlockSize>::MemoryPool(const MemoryPool<U, BlockSize>& memoryPool)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool(const MemoryPool<U, BlockSize, LeaveSingleFreeBlock>& memoryPool)
 noexcept :
 MemoryPool()
 {}
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>&
-MemoryPool<T, BlockSize>::operator=(MemoryPool&& memoryPool)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>&
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::operator=(MemoryPool&& memoryPool)
 noexcept
 {
   if (this != &memoryPool)
@@ -82,8 +82,8 @@ noexcept
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::~MemoryPool()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::~MemoryPool()
 noexcept
 {
   Block_* currBlock = firstBlock_;
@@ -96,9 +96,9 @@ noexcept
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::pointer
-MemoryPool<T, BlockSize>::address(reference x)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::address(reference x)
 const noexcept
 {
   return &x;
@@ -106,9 +106,9 @@ const noexcept
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::const_pointer
-MemoryPool<T, BlockSize>::address(const_reference x)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::const_pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::address(const_reference x)
 const noexcept
 {
   return &x;
@@ -116,9 +116,9 @@ const noexcept
 
 
 
-template <typename T, size_t BlockSize>
-typename MemoryPool<T, BlockSize>::Block_*
-MemoryPool<T, BlockSize>::allocateBlock()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::Block_*
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::allocateBlock()
 {
   // Allocate space for the new block
   data_pointer_ newBlockData = reinterpret_cast<data_pointer_>
@@ -144,9 +144,9 @@ MemoryPool<T, BlockSize>::allocateBlock()
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::pointer
-MemoryPool<T, BlockSize>::allocate(size_type n, const_pointer hint)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::allocate(size_type n, const_pointer hint)
 {
   if (firstFreeBlock_ == nullptr) {
     Block_* newBlock = allocateBlock();
@@ -174,9 +174,9 @@ MemoryPool<T, BlockSize>::allocate(size_type n, const_pointer hint)
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 inline void
-MemoryPool<T, BlockSize>::deallocate(pointer p, size_type n)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::deallocate(pointer p, size_type n)
 {
   if (p != nullptr) {
 	bool firstFreeBlockFollowsAfterCurrBlock = true;
@@ -200,7 +200,8 @@ MemoryPool<T, BlockSize>::deallocate(pointer p, size_type n)
 		currBlock->freeSlotsListHead = currSlot;
 		
 		// the block should be deleted?
-		if (++currBlock->freeSlotsCount == NumberOfSlotsPerBlock) {
+		if (++currBlock->freeSlotsCount == NumberOfSlotsPerBlock &&
+			!(LeaveSingleFreeBlock == true && firstBlock_ == lastBlock_)) {
 		  if (firstFreeBlock_ == currBlock) {
 			// if firstFreeBlock_ points to currBlock, which should
 			// be deallocated, search for the next free block
@@ -238,9 +239,9 @@ MemoryPool<T, BlockSize>::deallocate(pointer p, size_type n)
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::size_type
-MemoryPool<T, BlockSize>::max_size()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::size_type
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::max_size()
 const noexcept
 {
   size_type maxBlocks = (size_type)-1 / BlockSize;
@@ -249,30 +250,30 @@ const noexcept
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template <class U, class... Args>
 inline void
-MemoryPool<T, BlockSize>::construct(U* p, Args&&... args)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::construct(U* p, Args&&... args)
 {
   new (p) U (std::forward<Args>(args)...);
 }
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template <class U>
 inline void
-MemoryPool<T, BlockSize>::destroy(U* p)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::destroy(U* p)
 {
   p->~U();
 }
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template <class... Args>
-inline typename MemoryPool<T, BlockSize>::pointer
-MemoryPool<T, BlockSize>::newElement(Args&&... args)
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::newElement(Args&&... args)
 {
   pointer result = allocate();
   construct<value_type>(result, std::forward<Args>(args)...);
@@ -281,9 +282,9 @@ MemoryPool<T, BlockSize>::newElement(Args&&... args)
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 inline void
-MemoryPool<T, BlockSize>::deleteElement(pointer p)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::deleteElement(pointer p)
 {
   if (p != nullptr) {
     p->~value_type();
