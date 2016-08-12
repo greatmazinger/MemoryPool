@@ -43,36 +43,68 @@ struct Obj
 
 size_t Obj::count = 0;
 
+
+template <typename O>
+class AllocTest
+{
+public:
+  void alloc(int n) {
+    count_ += n;
+    for (int i=0; i < n; ++i) {
+      Obj *o = pool_.newElement();
+      ptrs_.push_back(o);
+    }
+  }
+  
+  void dealloc(int n) {
+    count_ -= n;
+    for (int i=0; i < n; ++i) {
+      auto p = ptrs_.back();
+      pool_.deleteElement(p);
+      ptrs_.pop_back();
+    }
+  }
+  
+  // shuffle pointers so dealloc random
+  void shuffle(int n = -1) {
+    const auto nb = ptrs_.size();
+    if (n < 0)
+      n = count_ / 4;
+    for (int i=0; i < n; ++i) {
+      const int s = rand() % nb, d = rand() % nb;
+      std::swap(ptrs_[s], ptrs_[d]);
+    }
+  }
+  
+  int count() const { return count_; }
+  
+private:
+  MemoryPool<O> pool_;
+  std::vector<Obj*> ptrs_;
+  int count_ = 0;
+};
+
 static void test()
 {
   MSG("Simple allocation test");
-  
-  MemoryPool<Obj> pool;
+ 
+  AllocTest<Obj> tpool;
   Obj::count = 0;
-  
-  const int nb = 100000;
-  std::vector<Obj*> ptrs;
-
   TEST(Obj::count == 0);
-  for (int i=0; i < nb; ++i)
-  {
-    Obj *o = pool.newElement();
-    ptrs.push_back(o);
-  }
-  TEST(Obj::count == nb);
+  const int sc = 1000;
   
-  // shuffle ptrs
-  for (int i=0; i < nb/4; ++i)
+  for (int m=0; m < 10; ++m)
   {
-    const int s = rand() % nb, d = rand() % nb;
-    std::swap(ptrs[s], ptrs[d]);
+    
+    tpool.alloc((rand() & 15)*sc);
+    TEST(Obj::count == tpool.count());
+    tpool.shuffle();
+    TEST(Obj::count == tpool.count());
+    tpool.dealloc(tpool.count()/2);
+    TEST(Obj::count == tpool.count());
   }
 
-  for (int i=0; i < nb; ++i)
-  {
-    pool.deleteElement(ptrs[i]);
-  }
-  ptrs.clear();
+  tpool.dealloc(tpool.count());
   TEST(Obj::count == 0);
 
   MSG("passed");
