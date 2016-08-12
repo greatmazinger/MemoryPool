@@ -9,4 +9,7 @@ include_directories(${WHICH_CPP})
 
 add_definitions(-std=c++11)
 
-add_executable(mempool_test test.cpp ${WHICH_CPP}/MemoryPool.hpp ${WHICH_CPP}/MemoryPool.inl)
+add_executable(mempool_test
+    test.cpp
+    ${WHICH_CPP}/MemoryPool.hpp ${WHICH_CPP}/MemoryPool.inl
+    StackAlloc.hpp)
