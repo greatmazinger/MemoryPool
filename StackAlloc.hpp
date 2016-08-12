@@ -31,19 +31,18 @@
 
 #include <memory>
 
-template <typename T>
-struct StackNode_
-{
-  T data;
-  StackNode_* prev;
-};
-
 /** T is the object to store in the stack, Alloc is the allocator to use */
 template <class T, class Alloc = std::allocator<T> >
 class StackAlloc
 {
+  struct StackNode_
+  {
+    T data;
+    StackNode_* prev;
+  };
+  
   public:
-    typedef StackNode_<T> Node;
+    typedef StackNode_ Node;
     typedef typename Alloc::template rebind<Node>::other allocator;
 
     /** Default constructor */
