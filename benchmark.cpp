@@ -79,7 +79,7 @@ int main()
   std::cout << (((double)clock() - start) / CLOCKS_PER_SEC) << "\n\n";
 
   /* Use MemoryPool */
-  StackAlloc<int, MemoryPool<int> > stackPool;
+  StackAlloc<int, MemoryPool<int, 4096, true> > stackPool;
   start = clock();
   for (int j = 0; j < REPS; j++)
   {
