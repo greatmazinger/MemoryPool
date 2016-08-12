@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.2)
 
 project(mempool)
 
-include_directories(C-11)
+set(WHICH_CPP C-11)
+
+include_directories(${WHICH_CPP})
 
 add_definitions(-std=c++11)
 
-add_executable(mempool_test test.cpp)
+add_executable(mempool_test test.cpp ${WHICH_CPP}/MemoryPool.hpp ${WHICH_CPP}/MemoryPool.inl)
