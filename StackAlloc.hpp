@@ -23,7 +23,7 @@
 
 /*-
  * A template class that implements a simple stack structure.
- * This demostrates how to use alloctor_traits (specifically with MemoryPool)
+ * This demonstrates how to use alloctor_traits (specifically with MemoryPool)
  */
 
 #ifndef STACK_ALLOC_H
