@@ -23,10 +23,19 @@
 #ifndef MEMORY_POOL_H
 #define MEMORY_POOL_H
 
+#ifdef _MSC_VER
+#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL != 0
+#error "define _ITERATOR_DEBUG_LEVEL as 0 to use this allocator for MSVC's STL containers"
+#endif
+#endif
+
 #include <climits>
 #include <cstddef>
+#include <cstdint>
+#include <type_traits>
+#include <utility>
 
-template <typename T, size_t BlockSize = 4096>
+template <typename T, size_t BlockSize = 4096, bool LeaveSingleFreeBlock = false>
 class MemoryPool
 {
   public:
@@ -43,14 +52,14 @@ class MemoryPool
     typedef std::true_type  propagate_on_container_swap;
 
     template <typename U> struct rebind {
-      typedef MemoryPool<U> other;
+      typedef MemoryPool<U, BlockSize, LeaveSingleFreeBlock> other;
     };
 
     /* Member functions */
     MemoryPool() noexcept;
     MemoryPool(const MemoryPool& memoryPool) noexcept;
     MemoryPool(MemoryPool&& memoryPool) noexcept;
-    template <class U> MemoryPool(const MemoryPool<U>& memoryPool) noexcept;
+    template <class U> MemoryPool(const MemoryPool<U, BlockSize, LeaveSingleFreeBlock>& memoryPool) noexcept;
 
     ~MemoryPool() noexcept;
 
@@ -79,18 +88,25 @@ class MemoryPool
     };
 
     typedef char* data_pointer_;
-    typedef Slot_ slot_type_;
-    typedef Slot_* slot_pointer_;
 
-    slot_pointer_ currentBlock_;
-    slot_pointer_ currentSlot_;
-    slot_pointer_ lastSlot_;
-    slot_pointer_ freeSlots_;
+	struct Block_ {
+	  Block_* nextBlock;
+	  Slot_* freeSlotsListHead;
+	  size_type freeSlotsCount;
 
-    size_type padPointer(data_pointer_ p, size_type align) const noexcept;
-    void allocateBlock();
+	  Slot_ slots[0];
+	};
 
-    static_assert(BlockSize >= 2 * sizeof(slot_type_), "BlockSize too small.");
+	Block_* firstBlock_;
+	Block_* lastBlock_;
+	Block_* firstFreeBlock_;
+
+	static constexpr size_type NumberOfSlotsPerBlock = (BlockSize - offsetof(Block_,slots)) / sizeof(Slot_);
+	static constexpr size_type LastSlotIndex = NumberOfSlotsPerBlock - 1;
+	
+    Block_* allocateBlock();
+
+    static_assert(BlockSize >= sizeof(Block_) + sizeof(Slot_), "BlockSize too small.");
 };
 
 #include "MemoryPool.inl"

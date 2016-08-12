@@ -25,92 +25,79 @@
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::size_type
-MemoryPool<T, BlockSize>::padPointer(data_pointer_ p, size_type align)
-const noexcept
-{
-  uintptr_t result = reinterpret_cast<uintptr_t>(p);
-  return ((align - result) % align);
-}
-
-
-
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::MemoryPool()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool()
 noexcept
 {
-  currentBlock_ = nullptr;
-  currentSlot_ = nullptr;
-  lastSlot_ = nullptr;
-  freeSlots_ = nullptr;
+  firstBlock_ = nullptr;
+  lastBlock_ = nullptr;
+  firstFreeBlock_ = nullptr;
 }
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::MemoryPool(const MemoryPool& memoryPool)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool(const MemoryPool& memoryPool)
 noexcept :
 MemoryPool()
 {}
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::MemoryPool(MemoryPool&& memoryPool)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool(MemoryPool&& memoryPool)
 noexcept
 {
-  currentBlock_ = memoryPool.currentBlock_;
-  memoryPool.currentBlock_ = nullptr;
-  currentSlot_ = memoryPool.currentSlot_;
-  lastSlot_ = memoryPool.lastSlot_;
-  freeSlots_ = memoryPool.freeSlots;
+  firstBlock_ = memoryPool.firstBlock_;
+  memoryPool.firstBlock_ = nullptr;
+  lastBlock_ = memoryPool.lastBlock_;
+  memoryPool.lastBlock_ = nullptr;
+  firstFreeBlock_ = memoryPool.firstFreeBlock_;
+  memoryPool.firstFreeBlock_ = nullptr;
 }
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template<class U>
-MemoryPool<T, BlockSize>::MemoryPool(const MemoryPool<U>& memoryPool)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::MemoryPool(const MemoryPool<U, BlockSize, LeaveSingleFreeBlock>& memoryPool)
 noexcept :
 MemoryPool()
 {}
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>&
-MemoryPool<T, BlockSize>::operator=(MemoryPool&& memoryPool)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>&
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::operator=(MemoryPool&& memoryPool)
 noexcept
 {
-  if (this != &memoryPool)
-  {
-    std::swap(currentBlock_, memoryPool.currentBlock_);
-    currentSlot_ = memoryPool.currentSlot_;
-    lastSlot_ = memoryPool.lastSlot_;
-    freeSlots_ = memoryPool.freeSlots;
+  if (this != &memoryPool) {
+    std::swap(firstBlock_, memoryPool.firstBlock_);
+    std::swap(lastBlock_, memoryPool.lastBlock_);
+    std::swap(firstFreeBlock_, memoryPool.firstFreeBlock_);
   }
   return *this;
 }
 
 
 
-template <typename T, size_t BlockSize>
-MemoryPool<T, BlockSize>::~MemoryPool()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::~MemoryPool()
 noexcept
 {
-  slot_pointer_ curr = currentBlock_;
-  while (curr != nullptr) {
-    slot_pointer_ prev = curr->next;
-    operator delete(reinterpret_cast<void*>(curr));
-    curr = prev;
+  Block_* currBlock = firstBlock_;
+  while (currBlock != nullptr) {
+    Block_* nextBlock = currBlock->nextBlock;
+    operator delete(reinterpret_cast<void*>(currBlock));
+    currBlock = nextBlock;
   }
 }
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::pointer
-MemoryPool<T, BlockSize>::address(reference x)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::address(reference x)
 const noexcept
 {
   return &x;
@@ -118,9 +105,9 @@ const noexcept
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::const_pointer
-MemoryPool<T, BlockSize>::address(const_reference x)
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::const_pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::address(const_reference x)
 const noexcept
 {
   return &x;
@@ -128,89 +115,164 @@ const noexcept
 
 
 
-template <typename T, size_t BlockSize>
-void
-MemoryPool<T, BlockSize>::allocateBlock()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::Block_*
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::allocateBlock()
 {
-  // Allocate space for the new block and store a pointer to the previous one
-  data_pointer_ newBlock = reinterpret_cast<data_pointer_>(operator new(BlockSize));
-  reinterpret_cast<slot_pointer_>(newBlock)->next = currentBlock_;
-  currentBlock_ = reinterpret_cast<slot_pointer_>(newBlock);
-  // Pad block body to satisfy the alignment requirements for elements
-  data_pointer_ body = newBlock + sizeof(slot_pointer_);
-  size_type bodyPadding = padPointer(body, alignof(slot_type_));
-  currentSlot_ = reinterpret_cast<slot_pointer_>(body + bodyPadding);
-  lastSlot_ = reinterpret_cast<slot_pointer_>
-              (newBlock + BlockSize - sizeof(slot_type_) + 1);
-}
+  // Allocate space for the new block
+  data_pointer_ newBlockData = reinterpret_cast<data_pointer_>
+                           (operator new(BlockSize));
 
+  Block_* newBlock = reinterpret_cast<Block_*>(newBlockData);
+  newBlock->nextBlock = nullptr;
+  newBlock->freeSlotsListHead = &(newBlock->slots[0]);
+  newBlock->freeSlotsListHead->next = nullptr;
+  newBlock->freeSlotsCount = NumberOfSlotsPerBlock;
+  newBlock->slots[0].next = nullptr;
 
-
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::pointer
-MemoryPool<T, BlockSize>::allocate(size_type n, const_pointer hint)
-{
-  if (freeSlots_ != nullptr) {
-    pointer result = reinterpret_cast<pointer>(freeSlots_);
-    freeSlots_ = freeSlots_->next;
-    return result;
+  if (lastBlock_ == nullptr) {
+    firstBlock_ = newBlock;
   }
   else {
-    if (currentSlot_ >= lastSlot_)
-      allocateBlock();
-    return reinterpret_cast<pointer>(currentSlot_++);
+    lastBlock_->nextBlock = newBlock;
   }
+  lastBlock_ = newBlock;
+
+  return newBlock;
 }
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::allocate(size_type n, const_pointer hint)
+{
+  if (firstFreeBlock_ == nullptr) {
+    Block_* newBlock = allocateBlock();
+  firstFreeBlock_ = newBlock;
+  }
+
+  Slot_* resSlot = firstFreeBlock_->freeSlotsListHead;
+
+  if (--firstFreeBlock_->freeSlotsCount == 0) {
+  firstFreeBlock_->freeSlotsListHead = nullptr;
+    do {
+    firstFreeBlock_ = firstFreeBlock_->nextBlock;
+  } while (firstFreeBlock_ != nullptr && firstFreeBlock_->freeSlotsCount == 0);
+  }
+  else {
+    if (resSlot->next == nullptr) {
+      resSlot->next = resSlot + 1;
+      resSlot->next->next = nullptr;
+    }
+    firstFreeBlock_->freeSlotsListHead = resSlot->next;
+  }
+
+  return reinterpret_cast<pointer>(resSlot);
+}
+
+
+
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 inline void
-MemoryPool<T, BlockSize>::deallocate(pointer p, size_type n)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::deallocate(pointer p, size_type n)
 {
   if (p != nullptr) {
-    reinterpret_cast<slot_pointer_>(p)->next = freeSlots_;
-    freeSlots_ = reinterpret_cast<slot_pointer_>(p);
+    bool firstFreeBlockFollowsAfterCurrBlock = true;
+    const uintptr_t searchAddress = reinterpret_cast<uintptr_t>(p);
+    for (Block_ *currBlock = firstBlock_, *prevBlock = nullptr;
+         currBlock != nullptr;
+         prevBlock = currBlock, currBlock = currBlock->nextBlock)
+    {
+      if (firstFreeBlock_ == currBlock) {
+        firstFreeBlockFollowsAfterCurrBlock = false;
+      }
+
+      const uintptr_t firstSlotAddress = reinterpret_cast<uintptr_t>(&currBlock->slots[0]);
+      const uintptr_t lastSlotAddress = reinterpret_cast<uintptr_t>(&currBlock->slots[LastSlotIndex]);
+      if (searchAddress >= firstSlotAddress
+          && searchAddress <= lastSlotAddress) {
+        Slot_* currSlot = reinterpret_cast<Slot_*>(p);
+
+        // insert deallocated memory to free slots list
+        currSlot->next = currBlock->freeSlotsListHead;
+        currBlock->freeSlotsListHead = currSlot;
+    
+        // the block should be deleted?
+        if (++currBlock->freeSlotsCount == NumberOfSlotsPerBlock &&
+          !(LeaveSingleFreeBlock == true && firstBlock_ == lastBlock_)) {
+          if (firstFreeBlock_ == currBlock) {
+          // if firstFreeBlock_ points to currBlock, which should
+          // be deallocated, search for the next free block
+          do {
+            firstFreeBlock_ = firstFreeBlock_->nextBlock;
+          } while (firstFreeBlock_ != nullptr &&
+            firstFreeBlock_->freeSlotsCount == 0);
+          }
+      
+          if (currBlock == firstBlock_) {
+          // if firstBlock_ points to currBlock,
+          // link the firstBlock_ to next block
+            firstBlock_ = currBlock->nextBlock;
+          }
+          else {
+          // link the prev block to next after curr block
+          prevBlock->nextBlock = currBlock->nextBlock;
+          }
+
+          if (currBlock == lastBlock_) {
+          // if lastBlock_ points to currBlock,
+          // link the lastBlock_ to prev block
+            lastBlock_ = prevBlock;
+          }
+          operator delete(reinterpret_cast<void*>(currBlock));
+        }
+        else if (firstFreeBlockFollowsAfterCurrBlock) {
+          firstFreeBlock_ = currBlock;
+        }
+        break;
+      }
+    }
   }
 }
 
 
 
-template <typename T, size_t BlockSize>
-inline typename MemoryPool<T, BlockSize>::size_type
-MemoryPool<T, BlockSize>::max_size()
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::size_type
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::max_size()
 const noexcept
 {
-  size_type maxBlocks = -1 / BlockSize;
-  return (BlockSize - sizeof(data_pointer_)) / sizeof(slot_type_) * maxBlocks;
+  size_type maxBlocks = (size_type)-1 / BlockSize;
+  return (BlockSize - sizeof(Block_)) / sizeof(Slot_) * maxBlocks;
 }
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template <class U, class... Args>
 inline void
-MemoryPool<T, BlockSize>::construct(U* p, Args&&... args)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::construct(U* p, Args&&... args)
 {
   new (p) U (std::forward<Args>(args)...);
 }
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template <class U>
 inline void
-MemoryPool<T, BlockSize>::destroy(U* p)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::destroy(U* p)
 {
   p->~U();
 }
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 template <class... Args>
-inline typename MemoryPool<T, BlockSize>::pointer
-MemoryPool<T, BlockSize>::newElement(Args&&... args)
+inline typename MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::pointer
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::newElement(Args&&... args)
 {
   pointer result = allocate();
   construct<value_type>(result, std::forward<Args>(args)...);
@@ -219,9 +281,9 @@ MemoryPool<T, BlockSize>::newElement(Args&&... args)
 
 
 
-template <typename T, size_t BlockSize>
+template <typename T, size_t BlockSize, bool LeaveSingleFreeBlock>
 inline void
-MemoryPool<T, BlockSize>::deleteElement(pointer p)
+MemoryPool<T, BlockSize, LeaveSingleFreeBlock>::deleteElement(pointer p)
 {
   if (p != nullptr) {
     p->~value_type();
