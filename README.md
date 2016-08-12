@@ -1,5 +1,5 @@
 Memory Pool
-==========
+===========
 
 This is a template class implementation of a memory pool allocator that is very simple to use and extremely fast with minimal overhead for each allocation/deallocation. The provided class is mostly compliant with the C++ Standard Library with a few exceptions (see [C++ Compliance](#c-compliance) for details).
 
@@ -28,12 +28,12 @@ C++ Compliance
 -------------------------
 MemoryPool is mostly compliant with the C++ Standard Library allocators. This means you can use it with `allocator_traits` ([see here] (http://www.cplusplus.com/reference/memory/allocator_traits/)) or just like you would use the `std::allocator` ([see here] (http://www.cplusplus.com/reference/memory/allocator/)). There are some differences though:
 
-* MemorPool **cannot** allocate multiple objects with a single call to `allocate` and will simply ignore the count value you pass to the allocate/deallocate function. Fixing this is not too hard, but it would deteriorate performance and create memory fragmentation.
+* MemoryPool **cannot** allocate multiple objects with a single call to `allocate` and will simply ignore the count value you pass to the allocate/deallocate function. Fixing this is not too hard, but it would deteriorate performance and create memory fragmentation.
 * This is **NOT** thread safe. You should create a different instance for each thread (suggested) or find some way of scheduling queries to the allocator.
 
 Usage
 -------------------------
-Put `MemoryPool.h` and `MemoryPool.tcc` into your project folder and include `MemoryPool.h` into your project. Do not forget to enable C++11 features (for example, with the `-std=c++11` flag if you use GCC). These files define a single template class in the common namespace:
+Put `MemoryPool.hpp` and `MemoryPool.inl` into your project folder and include `MemoryPool.hpp` into your project. Do not forget to enable C++11 features (for example, with the `-std=c++11` flag if you use GCC). These files define a single template class in the common namespace:
 ```C++
 template <typename T, size_t BlockSize = 4096>
 ```
@@ -86,7 +86,7 @@ Picking BlockSize
 
 Picking the correct `BlockSize` is essential for good performance. I suggest you pick a power of two, which may decrease memory fragmentation depending on your system. Also, make sure that `BlockSize` is at least several hundred times larger than the size of `T` for maximum performance. The idea is, the greater the `BlockSize`, the less calls to `malloc` the library will make. However, picking a size too big might increase memory usage unnecessarily and actually decrease the performance because `malloc` may need to make many system calls.
 
-For objects that contain several pointers, the default size of 4096 bytes should be good. If you need bigger object, you may need to time your code with larger sizes and see what works best. Unless you will be maintaining many MemoryPool objects, I do not think you need to go smaller than 4096 bytes. Though if you are working on a more limited platform (that has a copiler with C++11 support), you may need to go for smaller values. 
+For objects that contain several pointers, the default size of 4096 bytes should be good. If you need bigger object, you may need to time your code with larger sizes and see what works best. Unless you will be maintaining many MemoryPool objects, I do not think you need to go smaller than 4096 bytes. Though if you are working on a more limited platform (that has a compiler with C++11 support), you may need to go for smaller values. 
 
 About the Code
 -------------------------

@@ -133,11 +133,10 @@ void
 MemoryPool<T, BlockSize>::allocateBlock()
 {
   // Allocate space for the new block and store a pointer to the previous one
-  data_pointer_ newBlock = reinterpret_cast<data_pointer_>
-                           (operator new(BlockSize));
+  data_pointer_ newBlock = reinterpret_cast<data_pointer_>(operator new(BlockSize));
   reinterpret_cast<slot_pointer_>(newBlock)->next = currentBlock_;
   currentBlock_ = reinterpret_cast<slot_pointer_>(newBlock);
-  // Pad block body to staisfy the alignment requirements for elements
+  // Pad block body to satisfy the alignment requirements for elements
   data_pointer_ body = newBlock + sizeof(slot_pointer_);
   size_type bodyPadding = padPointer(body, alignof(slot_type_));
   currentSlot_ = reinterpret_cast<slot_pointer_>(body + bodyPadding);
