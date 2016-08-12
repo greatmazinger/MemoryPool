@@ -13,3 +13,7 @@ add_executable(benchmark
     benchmark.cpp
     ${WHICH_CPP}/MemoryPool.hpp ${WHICH_CPP}/MemoryPool.inl
     StackAlloc.hpp)
+
+add_executable(mptest
+    test.cpp
+    ${WHICH_CPP}/MemoryPool.hpp ${WHICH_CPP}/MemoryPool.inl)
