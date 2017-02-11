@@ -1,28 +1,32 @@
 Memory Pool
 ===========
 
-This is a template class implementation of a memory pool allocator that is very simple to use and extremely fast with minimal overhead for each allocation/deallocation. The provided class is mostly compliant with the C++ Standard Library with a few exceptions (see [C++ Compliance](#c-compliance) for details).
+This is a template class implementation of a memory pool allocator that is very simple to use and extremely fast with minimal overhead for each allocation/deallocation. The provided class is mostly compliant with the C++ Standard Library with a few exceptions (see [C++ Compliance](#c-compliance)).
 
 This library uses variadic templates for perfect argument forwarding and some other optimizations, and thus requires C++11 features. There also is a C++98 version, but the C++11 version has better memory management. 
 
 What is a Memory Pool
 -------------------------
-You would normally use `malloc` or `new` for dynamic memory management in C/C++. These functions are rather slow and have some memory overhead attached to them. This is fine if you make a few calls and ask for large chunks of memory, but if you need to store many small objects, the time and memory overhead may be unacceptable for high performance programs. This is where a memory pool comes in. 
-A memory pool allocates memory in big chunks and splits the memory into smaller pieces. Every time you request memory, one of these small chunks is returned instead making a call to the OS or the heap allocator. You can only use a memory pool if you know the size of the objects beforehand, but if you do, a memory pool has a lot of advantages:
+You would normally use `malloc` or `new` for dynamic memory management in C/C++. These functions are rather slow and have some memory overhead attached to them. 
 
-* It is substantially faster than `malloc` or `new`
-* There is almost no memory overhead since the size of each object is known beforehand (i.e. no need to store allocation metadata)
-* There is little to no memory fragmentation
+A memory pool allocates memory in big chunks and splits the memory into equally sized cells. Every time you request memory, a free cell is returned from the pool. You can only use a memory pool if the size of the objects are:
+* known beforehand.
+* is less than or equal to the predetermined cell size. (The recommended size from the source repo is that cell size should be at least twice as big as the object size. I still have to investigate this claim.)
+
+These are the advantages of a memory pool:
+* It is faster than `malloc` or `new` if implemented correctly.
+* Memory overhead is minimized as the size of each object is known beforehand. Note again that this assumes all objects are of the same size.
+* There is little to no memory fragmentation if object doesn't waste a lot of space in a cell.
 * You do not need to free object one by one. The allocator will free all the memory it allocated once its destructor is called. Note that this only works if the objects have a default destructor.
 
 A memory pool has just a few disadvantages:
 
-* Objects have a fixed size which must be known beforehand. This is usually not a problem and mostly the case if you need to allocate them in a bunch
-* You may need to fine tune them for your specific application. This is made very easy with the use of template classes.
+* Objects have a fixed size which must be known beforehand. Moreover usually only one type of object is stored in a memory pool.
+* You may need to fine tune the memory pool for your specific application.
 
 When to Use
 -------------------------
-You should use a memory pool when you need to allocate many objects of the same size. This is usually the case when you implement common data structures like linked lists, binary search trees, hash tables with chaining and so on. Using a memory pool in these cases will increase performance by several folds and reduce wasted memory substantially.
+You should use a memory pool when you need to allocate many objects of the same size.
 
 C++ Compliance
 -------------------------
@@ -100,6 +104,7 @@ License
 -------------------------
 This code is distributed under the MIT License, which is reproduced below and at the top of the project files. This pretty much means you can do whatever you want with the code, but I will not be liable for ANY kind of damage that this code might cause. Here is the full license which you should read before using the code:
 
+Copyright (c) 2017 Raoul Veroy
 Copyright (c) 2013 Cosku Acay, http://www.coskuacay.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -107,8 +112,3 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-Contact Me
--------------------------
-I am open to any type of suggestions, bug reports, or requests for the code. You can also contact me for any questions. Either email me at coskuacay@gmail.com or visit my [website] (http://www.coskuacay.com) for more information.
-
